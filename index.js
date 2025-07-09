@@ -2,7 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const app = express();
 
-app.get('/image', async (req, res) => {
+app.get('/', async (req, res) => {
   const url = req.query.url;
   if (!url) return res.status(400).send('Missing "url" parameter');
 
