@@ -9,5 +9,4 @@ RUN npm install
 COPY index.js ./
 
 # Запуск
-EXPOSE 2920
 CMD ["node", "index.js"]

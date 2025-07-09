@@ -4,5 +4,5 @@ services:
   proxy:
     build: .
     ports:
-      - "3000:3000"
+      - "2920:2920"
     restart: unless-stopped
