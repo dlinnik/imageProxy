@@ -18,7 +18,7 @@ app.get('/', async (req, res) => {
 
       response = await axios.get(directUrl, { responseType: 'stream' });
 
-    } else if (url.includes('disk.yandex.')) {
+    } else if (url.includes('disk.yandex.') || url.includes('disk.360.yandex')) {
       // Yandex Disk
       const apiUrl = 'https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=' + encodeURIComponent(url);
       const { data } = await axios.get(apiUrl);
