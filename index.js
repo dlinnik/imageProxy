@@ -18,16 +18,37 @@ app.get('/', async (req, res) => {
 
       response = await axios.get(directUrl, { responseType: 'stream' });
 
-    } else if (url.includes('disk.yandex.') || url.includes('disk.360.yandex')) {
-      // Yandex Disk
-      const apiUrl = 'https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=' + encodeURIComponent(url);
-      const { data } = await axios.get(apiUrl);
-      if (!data.href) return res.status(400).send('Unable to retrieve download link from Yandex');
+    } else if (url.includes('disk.yandex.') || url.includes('disk.360.yandex.')) {
+      // Yandex Disk public
+      const parsed = new URL(url);
+      const segments = parsed.pathname.split('/').filter(Boolean);
+      let downloadLink;
 
-      response = await axios.get(data.href, { responseType: 'stream' });
+      if (segments[0] === 'd' && segments[1] && segments.length > 2) {
+        // Shared folder + file: /d/<folderId>/<fileName>
+        const folderUrl = `${parsed.origin}/d/${segments[1]}`;
+        const fileName = segments.slice(2).join('/');
+        // Get metadata for the specific file
+        const metaUrl = `https://cloud-api.yandex.net/v1/disk/public/resources` +
+          `?public_key=${encodeURIComponent(folderUrl)}` +
+          `&path=/${fileName}`;
+        const { data: meta } = await axios.get(metaUrl);
+        if (!meta.file) throw new Error('Unable to get file metadata from Yandex');
+        downloadLink = meta.file;
+      } else {
+        // Direct file link: /i/<id>
+        const apiUrl = `https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=${encodeURIComponent(url)}`;
+        const { data } = await axios.get(apiUrl);
+        if (!data.href) throw new Error('Unable to get download link from Yandex');
+        downloadLink = data.href;
+      }
+
+      // Fetch and stream the file
+      response = await axios.get(downloadLink, { responseType: 'stream' });
 
     } else {
-      return res.status(400).send('Unsupported URL. Only Google Drive and Yandex Disk are supported.');
+      // Other URLs: fetch directly
+      response = await axios.get(url, { responseType: 'stream' });
     }
 
     // Отправляем поток с CORS-заголовками
