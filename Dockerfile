@@ -1,12 +1,30 @@
-FROM node:20-alpine
+# Build stage
+FROM node:22-alpine AS builder
 
-# Установка зависимостей
 WORKDIR /app
+
+# Copy package files
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
-# Копирование кода
-COPY index.js ./
+# Copy source and config files
+COPY tsconfig.json ./
+COPY src ./src
 
-# Запуск
-CMD ["node", "index.js"]
+# Build the application
+RUN npm run build:all
+
+# Runtime stage
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Copy package files and install production dependencies only
+COPY package*.json ./
+RUN npm ci --production
+
+# Copy built files from builder stage
+COPY --from=builder /app/dist ./dist
+
+# Set node command
+CMD ["node", "dist/index.js"]
