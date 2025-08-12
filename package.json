@@ -1,8 +1,12 @@
 {
   "name": "getphoto",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
+    "build:clean": "rimraf dist/",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch & node --watch dist/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
@@ -11,5 +15,10 @@
   "dependencies": {
     "axios": "^1.10.0",
     "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.23",
+    "@types/node": "^20.19.10",
+    "typescript": "^5.9.2"
   }
 }

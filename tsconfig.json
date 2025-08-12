@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "lib": ["ES2022"],
+    "esModuleInterop": true,
+    "skipLibCheck": false,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": "./src",                                  /* Specify the base directory to resolve non-relative module names. */
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "sourceMap": true,
+    // Makes catch variables unknown instead of any
+    "useUnknownInCatchVariables": true,
+    // Enables strict error checking
+    "strict": true,
+    // Ensures 'throw' statements throw Error objects
+    "exactOptionalPropertyTypes": true,
+    // Enables strict null checks
+    "strictNullChecks": true,
+    // Enables strict function types
+    "strictFunctionTypes": true,
+    // Ensures 'this' is typed correctly
+    "noImplicitThis": true,
+    // Prevents falling through cases in switch statements
+    "noFallthroughCasesInSwitch": true,
+    // Reports errors for unreachable code
+    "allowUnreachableCode": false
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
+

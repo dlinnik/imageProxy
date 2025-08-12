@@ -1,9 +1,10 @@
-const express = require('express');
-const axios = require('axios');
+import express, { Request, Response } from 'express';
+import axios from 'axios';
+
 const app = express();
 
-app.get('/', async (req, res) => {
-  const url = req.query.url;
+app.get('/', async (req: Request, res: Response) => {
+  const url = req.query.url as string;
   if (!url) return res.status(400).send('Missing "url" parameter');
 
   try {
@@ -22,7 +23,7 @@ app.get('/', async (req, res) => {
       // Yandex Disk public
       const parsed = new URL(url);
       const segments = parsed.pathname.split('/').filter(Boolean);
-      let downloadLink;
+      let downloadLink: string;
 
       if (segments[0] === 'd' && segments[1] && segments.length > 2) {
         // Shared folder + file: /d/<folderId>/<fileName>
@@ -58,7 +59,7 @@ app.get('/', async (req, res) => {
     response.data.pipe(res);
 
   } catch (err) {
-    console.error('Error:', err.message);
+    console.error('Error:', err instanceof Error ? err.message : `Unknown error: ${err}`);
     res.status(500).send('Failed to fetch image');
   }
 });
