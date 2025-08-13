@@ -66,6 +66,8 @@ http://localhost:2920/?url=https://drive.google.com/file/d/YOUR_FILE_ID/view
 
 # Яндекс.Диск
 http://localhost:2920/?url=https://disk.yandex.ru/d/LuLr3JDmys3nAg/9999A2САМОРЕЗ3.9X25-40 (1500х2000).jpg
+# with resizing
+https://ipx.databird.ru?url=https://disk.yandex.ru/i/ES1RdRlVkzxiUQ&width=900&height=1200&aspect=4:3
 
 # Прямой URL
 http://localhost:2920/?url=https://example.com/image.jpg
@@ -77,7 +79,7 @@ http://localhost:2920/?url=https://example.com/image.jpg
 
 ## Разработка
 
-Проект использует TypeScript с строгой типизацией. Исходный код находится в директории `src`, скомпилированный код — в `dist`.
+Проект использует TypeScript со строгой типизацией. Исходный код находится в директории `src`, скомпилированный код — в `dist`.
 
 Доступные npm-скрипты:
 - `npm run build`: Компиляция TypeScript
