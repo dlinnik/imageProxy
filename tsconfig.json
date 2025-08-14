@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ES2022",
+    "module": "NodeNext",
     "lib": ["ES2022"],
     "esModuleInterop": true,
     "skipLibCheck": false,
@@ -10,7 +10,7 @@
     "rootDir": "./src",
     "baseUrl": "./src",                                  /* Specify the base directory to resolve non-relative module names. */
     "resolveJsonModule": true,
-    "moduleResolution": "node",
+    "moduleResolution": "NodeNext",
     "sourceMap": true,
     // Makes catch variables unknown instead of any
     "useUnknownInCatchVariables": true,

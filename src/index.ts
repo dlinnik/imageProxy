@@ -75,7 +75,9 @@ app.get('/', async (req: Request, res: Response) => {
     res.setHeader('Content-Type', response.headers['content-type'] || 'application/octet-stream');
 
     if (width && height) {
-      await resizePicture(response.data, res, width, height, aspectRatioStr);
+      await resizePicture(response.data, res, width, height, aspectRatioStr).catch(error => {
+        throw error
+      })
     } else {
       // If no resizing is needed, just pipe the response directly
       res.setHeader('Content-Length', response.headers['content-length'] || '0');
@@ -84,7 +86,7 @@ app.get('/', async (req: Request, res: Response) => {
 
 
   } catch (err) {
-    console.error('Error:', err instanceof Error ? err.message : `Unknown error: ${err}`);
+    console.error(`Error url=${url}:`, err instanceof Error ? err.message : `Unknown error: ${err}`);
 
     if (axios.isAxiosError(err)) {
       const axiosError = err as AxiosError;
@@ -92,7 +94,8 @@ app.get('/', async (req: Request, res: Response) => {
         return res.status(404).send('Resource not found');
       }
     }
-
+    res.removeHeader('Content-Length');
+    res.removeHeader('Content-Type');
     res.status(500).send('Failed to process image');
   }
 });
