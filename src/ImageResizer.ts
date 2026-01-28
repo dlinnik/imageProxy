@@ -4,6 +4,51 @@ import {PassThrough, Readable, Writable} from "stream";
 import {pipeline} from "stream/promises";
 import axios from "axios";
 
+type FrameCacheEntry = {
+  buffer: Buffer;
+  width: number;
+  height: number;
+};
+
+const FRAME_CACHE_LIMIT = 5;
+const frameCache = new Map<string, FrameCacheEntry>();
+
+async function getFrameFromCache(frameUrl: string): Promise<FrameCacheEntry> {
+  // Hit: обновляем порядок (LRU) и возвращаем
+  const cached = frameCache.get(frameUrl);
+  if (cached) {
+    frameCache.delete(frameUrl);
+    frameCache.set(frameUrl, cached);
+    return cached;
+  }
+
+  // Miss: скачиваем, читаем метаданные и кладём в кэш
+  const frameResponse = await axios.get<ArrayBuffer>(frameUrl, {responseType: "arraybuffer"});
+  const buffer = Buffer.from(frameResponse.data);
+  const meta = await sharp(buffer).metadata();
+
+  if (!meta.width || !meta.height) {
+    throw new Error("Cannot get size of the frame picture");
+  }
+
+  const entry: FrameCacheEntry = {
+    buffer,
+    width: meta.width,
+    height: meta.height
+  };
+
+  // LRU: если в кэше уже FRAME_CACHE_LIMIT элементов, удаляем самый старый
+  if (frameCache.size >= FRAME_CACHE_LIMIT) {
+    const oldestKey = frameCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      frameCache.delete(oldestKey);
+    }
+  }
+
+  frameCache.set(frameUrl, entry);
+  return entry;
+}
+
 export async function resizePicture(
   inputStream: ReadableStream,
   outputStream: Writable,
@@ -114,18 +159,8 @@ export async function resizePictureWithFrame(
 ): Promise<void> {
   const safePadding = Math.max(0, Math.floor(padding));
 
-  // Загружаем рамку
-  const frameResponse = await axios.get<ArrayBuffer>(frameUrl, {responseType: "arraybuffer"});
-  const frameBuffer = Buffer.from(frameResponse.data);
-  const frameSharp = sharp(frameBuffer);
-  const frameMeta = await frameSharp.metadata();
-
-  if (!frameMeta.width || !frameMeta.height) {
-    throw new Error("Cannot get size of the frame picture");
-  }
-
-  const frameWidth = frameMeta.width;
-  const frameHeight = frameMeta.height;
+  // Загружаем рамку с LRU-кешированием по URL
+  const {buffer: frameBuffer, width: frameWidth, height: frameHeight} = await getFrameFromCache(frameUrl);
 
   const innerWidth = Math.max(frameWidth - 2 * safePadding, 1);
   const innerHeight = Math.max(frameHeight - 2 * safePadding, 1);
