@@ -1,10 +1,16 @@
 import _ from "lodash"
 import sharp from "sharp"
-import {PassThrough} from "stream";
+import {PassThrough, Readable, Writable} from "stream";
 import {pipeline} from "stream/promises";
-import {Writable} from 'stream';
+import axios from "axios";
 
-export async function resizePicture(inputStream: ReadableStream, outputStream: Writable, minWidth: number, minHeight: number, aspectRatioStr?: string): Promise<void> {
+export async function resizePicture(
+  inputStream: ReadableStream,
+  outputStream: Writable,
+  minWidth: number,
+  minHeight: number,
+  aspectRatioStr?: string
+): Promise<void> {
   const abortController = new AbortController();
   const passThrough = new PassThrough();
 
@@ -46,26 +52,138 @@ export async function resizePicture(inputStream: ReadableStream, outputStream: W
       newWidth = height / aspectRatio
     }
   }
-  const widthDiff = Math.max((newWidth - meta.width) / 2, 0)
-  const heightDiff = Math.max((newHeight - meta.height) / 2, 0)
+  const widthDiff = Math.max((newWidth - meta.width) / 2, 0);
+  const heightDiff = Math.max((newHeight - meta.height) / 2, 0);
 
-  return pipeline(passThrough, sharp()
-      .extend({
-        left: _.isInteger(widthDiff) ? widthDiff : Math.floor(widthDiff),
-        right: _.isInteger(widthDiff) ? widthDiff : Math.floor(widthDiff) + 1,
-        bottom: _.isInteger(heightDiff) ? heightDiff : Math.floor(heightDiff),
-        top: _.isInteger(heightDiff) ? heightDiff : Math.floor(heightDiff) + 1,
-        background: "white"
-      })
-      .png(), outputStream,
+  const transformer = sharp().extend({
+    left: _.isInteger(widthDiff) ? widthDiff : Math.floor(widthDiff),
+    right: _.isInteger(widthDiff) ? widthDiff : Math.floor(widthDiff) + 1,
+    bottom: _.isInteger(heightDiff) ? heightDiff : Math.floor(heightDiff),
+    top: _.isInteger(heightDiff) ? heightDiff : Math.floor(heightDiff) + 1,
+    background: "white"
+  }).jpeg();
+
+  return pipeline(
+    passThrough,
+    transformer,
+    outputStream,
     {end: false} // This prevents closing the output stream
   ).then(() => {
     outputStream.end()
-  })
+    })
     .catch((error) => {
       console.error('Image processing failed:', error);
       // outputStream is still open and can be used
       // You can write error data or continue processing
       throw error
     })
+}
+
+async function streamToBuffer(inputStream: Readable | ReadableStream): Promise<Buffer> {
+  return new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+
+    // Node.js Readable
+    if ("on" in inputStream) {
+      inputStream.on("data", (chunk: Buffer) => chunks.push(chunk));
+      inputStream.on("end", () => resolve(Buffer.concat(chunks)));
+      inputStream.on("error", reject);
+    } else {
+      // Web ReadableStream
+      const reader = inputStream.getReader();
+      const read = () => {
+        reader.read().then(({done, value}) => {
+          if (done) {
+            resolve(Buffer.concat(chunks));
+            return;
+          }
+          chunks.push(Buffer.from(value));
+          read();
+        }).catch(reject);
+      };
+      read();
+    }
+  });
+}
+
+export async function resizePictureWithFrame(
+  inputStream: ReadableStream,
+  outputStream: Writable,
+  frameUrl: string,
+  padding: number = 0
+): Promise<void> {
+  const safePadding = Math.max(0, Math.floor(padding));
+
+  // Загружаем рамку
+  const frameResponse = await axios.get<ArrayBuffer>(frameUrl, {responseType: "arraybuffer"});
+  const frameBuffer = Buffer.from(frameResponse.data);
+  const frameSharp = sharp(frameBuffer);
+  const frameMeta = await frameSharp.metadata();
+
+  if (!frameMeta.width || !frameMeta.height) {
+    throw new Error("Cannot get size of the frame picture");
+  }
+
+  const frameWidth = frameMeta.width;
+  const frameHeight = frameMeta.height;
+
+  const innerWidth = Math.max(frameWidth - 2 * safePadding, 1);
+  const innerHeight = Math.max(frameHeight - 2 * safePadding, 1);
+
+  // Читаем исходное изображение в буфер
+  const inputBuffer = await streamToBuffer(inputStream as unknown as Readable);
+  const baseSharp = sharp(inputBuffer);
+  const baseMeta = await baseSharp.metadata();
+
+  if (!baseMeta.width || !baseMeta.height) {
+    throw new Error("Cannot get size of the base picture");
+  }
+
+  const origWidth = baseMeta.width;
+  const origHeight = baseMeta.height;
+
+  // 1. Пропорционально изменяем изображение по ширине внутренней области
+  let targetWidth = innerWidth;
+  let targetHeight = Math.round((origHeight * innerWidth) / origWidth);
+
+  // Если после такого ресайза высота больше высоты внутренней области, ресайзим по высоте
+  if (targetHeight > innerHeight) {
+    targetHeight = innerHeight;
+    targetWidth = Math.round((origWidth * innerHeight) / origHeight);
+  }
+
+  // Один проход ресайза до нужного размера
+  const resizedBuffer = await sharp(inputBuffer)
+    .resize(targetWidth, targetHeight)
+    .toBuffer();
+
+  // Вычисляем позицию для центрирования картинки внутри внутренней области рамки
+  const offsetX = safePadding + Math.floor((innerWidth - targetWidth) / 2);
+  const offsetY = safePadding + Math.floor((innerHeight - targetHeight) / 2);
+
+  // Создаём итоговое изображение: сначала кладём базовую картинку, затем рамку поверх
+  const finalImage = sharp({
+    create: {
+      width: frameWidth,
+      height: frameHeight,
+      channels: 4,
+      background: {r: 255, g: 255, b: 255, alpha: 0}
+    }
+  })
+    .composite([
+      {
+        input: resizedBuffer,
+        left: offsetX,
+        top: offsetY
+      },
+      {
+        input: frameBuffer,
+        left: 0,
+        top: 0
+      }
+    ])
+    .jpeg();
+
+  const finalBuffer = await finalImage.toBuffer();
+  outputStream.end(finalBuffer);
 }

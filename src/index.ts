@@ -1,7 +1,7 @@
 import express, {Request, Response} from 'express';
 import axios, {AxiosError} from 'axios';
 import _ from 'lodash';
-import {resizePicture} from "./ImageResizer.js";
+import {resizePicture, resizePictureWithFrame} from "./ImageResizer.js";
 
 const app = express();
 
@@ -13,18 +13,35 @@ function getParam(req: Request, paramName: string) {
 app.get('/', async (req: Request, res: Response) => {
   const url = getParam(req, 'url');
   if (!url) return res.status(400).send('Missing "url" parameter');
+
+  const frameUrl = getParam(req, 'frame');
+  const paddingStr = getParam(req, 'padding');
+
   const widthStr = getParam(req, 'width');
   const heightStr = getParam(req, 'height');
   const width = widthStr ? parseInt(widthStr, 10) : undefined;
   const height = heightStr ? parseInt(heightStr, 10) : undefined;
   const aspectRatioStr = getParam(req, 'aspect');
-  if (_.isNaN(width) || _.isNaN(height)) {
-    return res.status(400).send('Invalid "width" or "height" parameter');
-  }
-  if (aspectRatioStr && !/^\d+:\d+$/.test(aspectRatioStr)) {
-    return res.status(400).send('Invalid "aspect" parameter format, expected "X:Y"');
+
+  // Валидация padding
+  let padding: number | undefined = undefined;
+  if (paddingStr !== undefined) {
+    const p = parseInt(paddingStr, 10);
+    if (_.isNaN(p) || p < 0) {
+      return res.status(400).send('Invalid "padding" parameter');
+    }
+    padding = p;
   }
 
+  // Если задан frame, игнорируем width / height / aspect и их валидацию
+  if (!frameUrl) {
+    if (_.isNaN(width) || _.isNaN(height)) {
+      return res.status(400).send('Invalid "width" or "height" parameter');
+    }
+    if (aspectRatioStr && !/^\d+:\d+$/.test(aspectRatioStr)) {
+      return res.status(400).send('Invalid "aspect" parameter format, expected "X:Y"');
+    }
+  }
   try {
     let response;
 
@@ -72,14 +89,21 @@ app.get('/', async (req: Request, res: Response) => {
 
     // Отправляем поток с CORS-заголовками
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Content-Type', response.headers['content-type'] || 'application/octet-stream');
 
-    if (width && height) {
+    if (frameUrl) {
+      // Режим с рамкой: всегда возвращаем JPEG
+      res.setHeader('Content-Type', 'image/jpeg');
+      await resizePictureWithFrame(response.data, res, frameUrl, padding ?? 0);
+    } else if (width && height) {
+      // Ресайз: всегда возвращаем JPEG
+      res.setHeader('Content-Type', 'image/jpeg');
       await resizePicture(response.data, res, width, height, aspectRatioStr).catch(error => {
         throw error
       })
     } else {
       // If no resizing is needed, just pipe the response directly
+      const sourceContentType = (response.headers['content-type'] as string | undefined) || 'application/octet-stream';
+      res.setHeader('Content-Type', sourceContentType);
       res.setHeader('Content-Length', response.headers['content-length'] || '0');
       response.data.pipe(res);
     }
