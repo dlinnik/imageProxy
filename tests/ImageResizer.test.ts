@@ -56,5 +56,6 @@ describe('Image resizer', function () {
 
     it('should respect padding but keep output size equals frame', async () => {
         await processImageWithFrame('himeji_640x480.jpg', 40, 'himeji_framed_padding40_480x640.jpg');
+        await processImageWithFrame('gastro_400x566.png', 40, 'gastro_framed_padding40_480x640.jpg');
     })
 })

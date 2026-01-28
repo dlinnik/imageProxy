@@ -1,6 +1,6 @@
 import _ from "lodash"
 import sharp from "sharp"
-import {PassThrough, Readable, Writable} from "stream";
+import {PassThrough, Writable} from "stream";
 import {pipeline} from "stream/promises";
 import axios from "axios";
 
@@ -124,39 +124,24 @@ export async function resizePicture(
     })
 }
 
-async function streamToBuffer(inputStream: Readable | ReadableStream): Promise<Buffer> {
-  return new Promise<Buffer>((resolve, reject) => {
-    const chunks: Buffer[] = [];
-
-    // Node.js Readable
-    if ("on" in inputStream) {
-      inputStream.on("data", (chunk: Buffer) => chunks.push(chunk));
-      inputStream.on("end", () => resolve(Buffer.concat(chunks)));
-      inputStream.on("error", reject);
-    } else {
-      // Web ReadableStream
-      const reader = inputStream.getReader();
-      const read = () => {
-        reader.read().then(({done, value}) => {
-          if (done) {
-            resolve(Buffer.concat(chunks));
-            return;
-          }
-          chunks.push(Buffer.from(value));
-          read();
-        }).catch(reject);
-      };
-      read();
-    }
-  });
-}
-
 export async function resizePictureWithFrame(
   inputStream: ReadableStream,
   outputStream: Writable,
   frameUrl: string,
   padding: number = 0
 ): Promise<void> {
+  const abortController = new AbortController();
+  const passThrough = new PassThrough();
+  const sharpInstance = sharp();
+
+  pipeline(inputStream, sharpInstance, passThrough, {signal: abortController.signal})
+    .catch(error => {
+        if (error.name !== 'AbortError') {
+          console.error('Failure (frame/base pipeline):', error);
+        }
+      }
+    )
+
   const safePadding = Math.max(0, Math.floor(padding));
 
   // Загружаем рамку с LRU-кешированием по URL
@@ -165,12 +150,16 @@ export async function resizePictureWithFrame(
   const innerWidth = Math.max(frameWidth - 2 * safePadding, 1);
   const innerHeight = Math.max(frameHeight - 2 * safePadding, 1);
 
-  // Читаем исходное изображение в буфер
-  const inputBuffer = await streamToBuffer(inputStream as unknown as Readable);
-  const baseSharp = sharp(inputBuffer);
-  const baseMeta = await baseSharp.metadata();
+  const baseMeta = await sharpInstance.metadata().catch(() => {
+    abortController.abort()
+  })
+  if (!baseMeta || !baseMeta.width || !baseMeta.height) {
+    abortController.abort()
+    throw new Error("Cannot get size of the picture")
+  }
 
   if (!baseMeta.width || !baseMeta.height) {
+    abortController.abort()
     throw new Error("Cannot get size of the base picture");
   }
 
@@ -188,8 +177,8 @@ export async function resizePictureWithFrame(
   }
 
   // Один проход ресайза до нужного размера
-  const resizedBuffer = await sharp(inputBuffer)
-    .resize(targetWidth, targetHeight)
+  const resizedBuffer = await passThrough
+    .pipe(sharp().resize(targetWidth, targetHeight))
     .toBuffer();
 
   // Вычисляем позицию для центрирования картинки внутри внутренней области рамки
@@ -219,6 +208,18 @@ export async function resizePictureWithFrame(
     ])
     .jpeg();
 
-  const finalBuffer = await finalImage.toBuffer();
-  outputStream.end(finalBuffer);
+  return pipeline(
+    passThrough,
+    finalImage,
+    outputStream,
+    {end: false} // This prevents closing the output stream
+  ).then(() => {
+    outputStream.end()
+  })
+    .catch((error) => {
+      console.error('Image processing failed:', error);
+      // outputStream is still open and can be used
+      // You can write error data or continue processing
+      throw error
+    })
 }
