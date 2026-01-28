@@ -166,8 +166,8 @@ export async function resizePictureWithFrame(
     create: {
       width: frameWidth,
       height: frameHeight,
-      channels: 4,
-      background: {r: 255, g: 255, b: 255, alpha: 0}
+      channels: 3,
+      background: "white"
     }
   })
     .composite([
