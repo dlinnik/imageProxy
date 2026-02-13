@@ -129,8 +129,8 @@ export async function resizePictureWithFrame(
   outputStream: Writable,
   frameUrl: string,
   photoWidth: number | undefined,
-  photoTop: number,
-  photoLeft: number
+  photoLeft: number,
+  photoTop: number
 ): Promise<void> {
   const abortController = new AbortController();
   const passThrough = new PassThrough();
@@ -167,6 +167,12 @@ export async function resizePictureWithFrame(
   const targetWidth = photoWidth ?? origWidth;
   const targetHeight = Math.round((origHeight * targetWidth) / origWidth);
 
+  // Вычисляем размеры финального изображения на основе позиции и размера фото
+  // Ширина = максимум от (левого смещения + ширина фото, исходная ширина рамки)
+  const finalWidth = Math.max(photoLeft + targetWidth, frameWidth);
+  // Высота = максимум от (верхнего смещения + высота фото, исходная высота рамки)
+  const finalHeight = Math.max(photoTop + targetHeight, frameHeight);
+
   // Один проход ресайза до нужного размера
   const resizedBuffer = await passThrough
     .pipe(sharp().resize(targetWidth, targetHeight))
@@ -175,8 +181,8 @@ export async function resizePictureWithFrame(
   // Создаём итоговое изображение: сначала кладём рамку, затем фото на нужные координаты
   const finalImage = sharp({
     create: {
-      width: frameWidth,
-      height: frameHeight,
+      width: finalWidth,
+      height: finalHeight,
       channels: 3,
       background: "white"
     }

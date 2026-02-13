@@ -36,15 +36,15 @@ app.get('/', async (req: Request, res: Response) => {
       }
     }
 
-    // top опциональный: по умолчанию 0, может быть отрицательным
+    // top опциональный: по умолчанию 0
     top = topStr ? parseInt(topStr, 10) : 0;
-    if (_.isNaN(top)) {
+    if (_.isNaN(top) || top < 0) {
       return res.status(400).send('Invalid "top" parameter');
     }
 
-    // left опциональный: по умолчанию 0, может быть отрицательным
+    // left опциональный: по умолчанию 0
     left = leftStr ? parseInt(leftStr, 10) : 0;
-    if (_.isNaN(left)) {
+    if (_.isNaN(left) || left < 0) {
       return res.status(400).send('Invalid "left" parameter');
     }
   } else {
@@ -113,7 +113,7 @@ app.get('/', async (req: Request, res: Response) => {
     if (frameUrl) {
       // Режим с рамкой: всегда возвращаем JPEG
       res.setHeader('Content-Type', 'image/jpeg');
-      await resizePictureWithFrame(response.data, res, frameUrl, width, top!, left!);
+      await resizePictureWithFrame(response.data, res, frameUrl, width, left!, top!);
     } else if (width && height) {
       // Ресайз: всегда возвращаем JPEG
       res.setHeader('Content-Type', 'image/jpeg');
