@@ -15,26 +15,46 @@ app.get('/', async (req: Request, res: Response) => {
   if (!url) return res.status(400).send('Missing "url" parameter');
 
   const frameUrl = getParam(req, 'frame');
-  const paddingStr = getParam(req, 'padding');
-
-  const widthStr = getParam(req, 'width');
-  const heightStr = getParam(req, 'height');
-  const width = widthStr ? parseInt(widthStr, 10) : undefined;
-  const height = heightStr ? parseInt(heightStr, 10) : undefined;
   const aspectRatioStr = getParam(req, 'aspect');
 
-  // Валидация padding
-  let padding: number | undefined = undefined;
-  if (paddingStr !== undefined) {
-    const p = parseInt(paddingStr, 10);
-    if (_.isNaN(p) || p < 0) {
-      return res.status(400).send('Invalid "padding" parameter');
-    }
-    padding = p;
-  }
+  let width: number | undefined = undefined;
+  let height: number | undefined = undefined;
+  let top: number | undefined = undefined;
+  let left: number | undefined = undefined;
 
-  // Если задан frame, игнорируем width / height / aspect и их валидацию
-  if (!frameUrl) {
+  if (frameUrl) {
+    // Режим с рамкой: width, top, left - все опциональные
+    const widthStr = getParam(req, 'width');
+    const topStr = getParam(req, 'top');
+    const leftStr = getParam(req, 'left');
+
+    // width опциональный: если не передан, фото не ресайзится
+    if (widthStr) {
+      width = parseInt(widthStr, 10);
+      if (_.isNaN(width) || width <= 0) {
+        return res.status(400).send('Invalid "width" parameter');
+      }
+    }
+
+    // top опциональный: по умолчанию 0, может быть отрицательным
+    top = topStr ? parseInt(topStr, 10) : 0;
+    if (_.isNaN(top)) {
+      return res.status(400).send('Invalid "top" parameter');
+    }
+
+    // left опциональный: по умолчанию 0, может быть отрицательным
+    left = leftStr ? parseInt(leftStr, 10) : 0;
+    if (_.isNaN(left)) {
+      return res.status(400).send('Invalid "left" parameter');
+    }
+  } else {
+    // Обычный режим ресайза: используем width, height, aspect
+    const widthStr = getParam(req, 'width');
+    const heightStr = getParam(req, 'height');
+
+    width = widthStr ? parseInt(widthStr, 10) : undefined;
+    height = heightStr ? parseInt(heightStr, 10) : undefined;
+
     if (_.isNaN(width) || _.isNaN(height)) {
       return res.status(400).send('Invalid "width" or "height" parameter');
     }
@@ -93,7 +113,7 @@ app.get('/', async (req: Request, res: Response) => {
     if (frameUrl) {
       // Режим с рамкой: всегда возвращаем JPEG
       res.setHeader('Content-Type', 'image/jpeg');
-      await resizePictureWithFrame(response.data, res, frameUrl, padding ?? 0);
+      await resizePictureWithFrame(response.data, res, frameUrl, width, top!, left!);
     } else if (width && height) {
       // Ресайз: всегда возвращаем JPEG
       res.setHeader('Content-Type', 'image/jpeg');

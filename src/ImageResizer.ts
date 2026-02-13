@@ -128,7 +128,9 @@ export async function resizePictureWithFrame(
   inputStream: ReadableStream,
   outputStream: Writable,
   frameUrl: string,
-  padding: number = 0
+  photoWidth: number | undefined,
+  photoTop: number,
+  photoLeft: number
 ): Promise<void> {
   const abortController = new AbortController();
   const passThrough = new PassThrough();
@@ -142,13 +144,8 @@ export async function resizePictureWithFrame(
       }
     )
 
-  const safePadding = Math.max(0, Math.floor(padding));
-
   // Загружаем рамку с LRU-кешированием по URL
   const {buffer: frameBuffer, width: frameWidth, height: frameHeight} = await getFrameFromCache(frameUrl);
-
-  const innerWidth = Math.max(frameWidth - 2 * safePadding, 1);
-  const innerHeight = Math.max(frameHeight - 2 * safePadding, 1);
 
   const baseMeta = await sharpInstance.metadata().catch(() => {
     abortController.abort()
@@ -166,26 +163,16 @@ export async function resizePictureWithFrame(
   const origWidth = baseMeta.width;
   const origHeight = baseMeta.height;
 
-  // 1. Пропорционально изменяем изображение по ширине внутренней области
-  let targetWidth = innerWidth;
-  let targetHeight = Math.round((origHeight * innerWidth) / origWidth);
-
-  // Если после такого ресайза высота больше высоты внутренней области, ресайзим по высоте
-  if (targetHeight > innerHeight) {
-    targetHeight = innerHeight;
-    targetWidth = Math.round((origWidth * innerHeight) / origHeight);
-  }
+  // Если width не передан, используем исходную ширину фото
+  const targetWidth = photoWidth ?? origWidth;
+  const targetHeight = Math.round((origHeight * targetWidth) / origWidth);
 
   // Один проход ресайза до нужного размера
   const resizedBuffer = await passThrough
     .pipe(sharp().resize(targetWidth, targetHeight))
     .toBuffer();
 
-  // Вычисляем позицию для центрирования картинки внутри внутренней области рамки
-  const offsetX = safePadding + Math.floor((innerWidth - targetWidth) / 2);
-  const offsetY = safePadding + Math.floor((innerHeight - targetHeight) / 2);
-
-  // Создаём итоговое изображение: сначала кладём базовую картинку, затем рамку поверх
+  // Создаём итоговое изображение: сначала кладём рамку, затем фото на нужные координаты
   const finalImage = sharp({
     create: {
       width: frameWidth,
@@ -197,8 +184,8 @@ export async function resizePictureWithFrame(
     .composite([
       {
         input: resizedBuffer,
-        left: offsetX,
-        top: offsetY
+        left: photoLeft,
+        top: photoTop
       },
       {
         input: frameBuffer,
