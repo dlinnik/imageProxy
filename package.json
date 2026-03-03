@@ -16,10 +16,10 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "axios": "^1.10.0",
-    "express": "^5.1.0",
-    "lodash": "^4.17.21",
-    "sharp": "^0.34.3"
+    "axios": "^1.13.6",
+    "express": "^5.2.1",
+    "lodash": "^4.17.23",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@types/chai": "^5.2.2",
